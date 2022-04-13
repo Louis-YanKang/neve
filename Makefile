@@ -1,4 +1,4 @@
-CXX = g++
+CXX = armclang++
 MPICXX = mpicxx
 
 # use -xmic-avx512 instead of -xHost for Intel Xeon Phi platforms

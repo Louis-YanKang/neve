@@ -50,6 +50,9 @@
 #include <climits>
 #include <array>
 #include <unordered_map>
+#include <stdio.h>
+#include <stdlib.h>
+#include <stddef.h>
 
 #if defined(USE_SHARED_MEMORY)
 #include <omp.h>
@@ -61,6 +64,12 @@
 #include "utils.hpp"
 
 unsigned seed;
+
+
+#ifndef OFFSET
+#define OFFSET 0
+#endif
+
 
 #ifdef EDGE_AS_VERTEX_PAIR
 struct Edge
@@ -80,22 +89,23 @@ struct Edge
 };
 #endif
 
-#if defined(USE_SHARED_MEMORY) && defined(ZFILL_CACHE_LINES) && defined(__ARM_ARCH) && __ARM_ARCH >= 8
-#ifndef CACHE_LINE_SIZE_BYTES
-#define CACHE_LINE_SIZE_BYTES   256
-#endif
+//#if defined(USE_SHARED_MEMORY) && defined(ZFILL_CACHE_LINES) && defined(__ARM_ARCH) && __ARM_ARCH >= 8
+//#ifndef CACHE_LINE_SIZE_BYTES
+//#define CACHE_LINE_SIZE_BYTES   256
+//#endif
 /* The zfill distance must be large enough to be ahead of the L2 prefetcher */
 static const int ZFILL_DISTANCE = 100;
 
 /* x-byte cache lines */
-static const int ELEMS_PER_CACHE_LINE = CACHE_LINE_SIZE_BYTES / sizeof(GraphWeight);
+static const int ELEMS_PER_CACHE_LINE = 256 / sizeof(GraphWeight);
+//CACHE_LINE_SIZE_BYTES / sizeof(GraphWeight);
 
 /* Offset from a[j] to zfill */
 static const int ZFILL_OFFSET = ZFILL_DISTANCE * ELEMS_PER_CACHE_LINE;
 
 static inline void zfill(GraphWeight * a) 
 { asm volatile("dc zva, %0": : "r"(a)); }
-#endif
+//#endif
 
 struct EdgeTuple
 {
@@ -218,52 +228,75 @@ class Graph
         }
 
         // Memory: 2*nv*(sizeof GraphElem) + 2*ne*(sizeof GraphWeight) + (2*ne*(sizeof GraphElem + GraphWeight)) 
+        // const std::size_t nbrscan_mem = 2*nv_*sizeof(GraphElem) + 2*ne_*sizeof(GraphWeight) + 2*ne_*(sizeof(GraphElem) + sizeof(GraphWeight));
+        
         inline void nbrscan() 
         {
+
+
 #ifdef LLNL_CALIPER_ENABLE
 	    CALI_MARK_BEGIN("nbrscan");
 	    CALI_MARK_BEGIN("parallel");
 #endif
-            GraphElem e0, e1;
-#ifdef ENABLE_PREFETCH
-#ifdef __INTEL_COMPILER
-#pragma noprefetch edge_weights_
-#pragma prefetch edge_indices_:3
-#pragma prefetch edge_list_:3
-#endif
-#endif
-#ifdef USE_OMP_DYNAMIC
-#pragma omp parallel for schedule(dynamic)
-#elif defined USE_OMP_TASKLOOP_MASTER
-#pragma omp parallel
-#pragma omp master
-#pragma omp taskloop
-#elif defined USE_OMP_TASKS_FOR
-#pragma omp parallel
-#pragma omp for
-#else
-#pragma omp parallel for
-#endif
-            for (GraphElem i = 0; i < nv_; i++)
-            {
-#ifdef USE_OMP_TASKS_FOR
-                #pragma omp task
-		    {
-#endif
-                for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
-                {
-                    Edge const& edge = edge_list_[e];
-                    edge_weights_[e] = edge.weight_;
-                }
-#ifdef USE_OMP_TASKS_FOR
-		    }
-#endif
-            }
+      GraphElem e0, e1;   
+
+#pragma omp parallel 
+  {
+  int const nthreads = omp_get_num_threads();
+  int const tid = omp_get_thread_num();
+  
+  #pragma omp for
+      
+
+    for (GraphElem i = 0; i < nv_; i++)
+    {
+                //GraphElem e = edge_indices_[0];
+                //while(e < ELEMS_PER_CACHE_LINE){
+                    //for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
+                    //{  
+
+                        size_t nbrscan_mem = edge_indices_[i+1]-edge_indices_[i];
+
+                        size_t const nbr_scan_chunk = (nbrscan_mem) / nthreads;
+                                                                              
+                        GraphWeight * const zfill_limit = edge_weights_ + ( tid + 1 )*nbr_scan_chunk - ZFILL_OFFSET;
+                                                                            
+                        //#pragma omp parallel for schedule(static)
+                        for (size_t j=0; j < nbrscan_mem; j+=ELEMS_PER_CACHE_LINE) {
+                            
+                           
+                            Edge * const edgeList = edge_list_;
+                            GraphWeight * const edgeWeight = edge_weights_;
+                            
+                            Edge * const edgeListj = edgeList + j;
+                            GraphWeight * const edgeWeightj = edgeWeight + j;
+                    
+                            if (edgeWeightj+ZFILL_OFFSET < zfill_limit) {
+                              zfill(edgeWeightj+ZFILL_OFFSET);
+                            }                                   
+                            
+
+                            for(GraphElem e = edge_indices_[i]+j; e < edge_indices_[i]+j+ELEMS_PER_CACHE_LINE; ++e){                        
+                              
+                              Edge const& edge = edge_list_[e];
+                              edge_weights_[e] = edge.weight_;
+                            
+                              //edgeWeightj[e] = edgeListj[e];
+                            }
+                        }
+                    //}
+                 //}
+
+
+      }// for 
+
 #ifdef LLNL_CALIPER_ENABLE
 	    CALI_MARK_END("parallel");
 	    CALI_MARK_END("nbrscan");
 #endif
-        }
+        }// deafult parallel region
+      }
+
 
         // Memory: 2*nv*(sizeof GraphElem) + 3*ne*(sizeof GraphWeight) + (2*ne*(sizeof GraphElem + GraphWeight)) 
         inline void nbrsum() 
