@@ -250,10 +250,6 @@ class Graph
 
     for (GraphElem i = 0; i < nv_; i++)
     {
-                //GraphElem e = edge_indices_[0];
-                //while(e < ELEMS_PER_CACHE_LINE){
-                    //for (GraphElem e = edge_indices_[i]; e < edge_indices_[i+1]; e++)
-                    //{  
 
                         size_t nbrscan_mem = edge_indices_[i+1]-edge_indices_[i];
 
@@ -261,7 +257,7 @@ class Graph
                                                                               
                         GraphWeight * const zfill_limit = edge_weights_ + ( tid + 1 )*nbr_scan_chunk - ZFILL_OFFSET;
                                                                             
-                        //#pragma omp parallel for schedule(static)
+                        //#pragma omp parallel for schedule(static) 
                         for (size_t j=0; j < nbrscan_mem; j+=ELEMS_PER_CACHE_LINE) {
                             
                            
@@ -281,14 +277,13 @@ class Graph
                               Edge const& edge = edge_list_[e];
                               edge_weights_[e] = edge.weight_;
                             
-                              //edgeWeightj[e] = edgeListj[e];
                             }
                         }
-                    //}
-                 //}
+                  
+                
 
 
-      }// for 
+      } 
 
 #ifdef LLNL_CALIPER_ENABLE
 	    CALI_MARK_END("parallel");
