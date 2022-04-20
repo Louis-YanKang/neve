@@ -311,7 +311,7 @@ class Graph
         int const nthreads = omp_get_num_threads();             
         int const tid = omp_get_thread_num();
 #pragma omp for
-            for (GraphElem i = 0; i < nv_; i++)
+            for (GraphElem i = 0; i < nv_; i+=ELEMS_PER_CACHE_LINE)
             {
                   size_t nbrscan_mem = edge_indices_[i+1]-edge_indices_[i];                          
                   size_t const nbr_scan_chunk = (nbrscan_mem) / nthreads;                          
