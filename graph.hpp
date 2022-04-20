@@ -346,9 +346,10 @@ class Graph
               if (vertexDegreej+ZFILL_OFFSET < zfill_limit) {                                                                       zfill(vertexDegreej+ZFILL_OFFSET);
               }  
             **/
-
+            
+            #pragma omp parallel for 
             for(size_t j=0; j < ELEMS_PER_CACHE_LINE; j+=1){
-
+              
               for (GraphElem e = edge_indices_[i+j]; e < edge_indices_[i+j+1]; ++e)
                   {
                       Edge const& edge = edge_list_[e];
@@ -410,8 +411,10 @@ class Graph
                  
                   GraphWeight wmax = -1.0;
                 
+                  #pragma omp parallel for
                   for(size_t j=0; j < ELEMS_PER_CACHE_LINE; j+=1){
                       
+                      //#pragma omp parallel for schedule(static)
                       for (GraphElem e = edge_indices_[i+j]; e < edge_indices_[i+j+1]; ++e)
                         {
                           Edge const& edge = edge_list_[e];
