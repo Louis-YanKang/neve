@@ -317,13 +317,13 @@ class Graph
                   size_t const nbr_scan_chunk = (nbrscan_mem) / nthreads;                          
                   GraphWeight * const zfill_limit = vertex_degree_ + ( tid + 1 )*nbr_scan_chunk - ZFILL_OFFSET;
 
-                  Edge * const edgeList = edge_list_;
+                  //Edge * const edgeList = edge_list_;
                                         
                   GraphWeight * const vertexDegree = vertex_degree_;
                                                                     
-                  Edge * const edgeListj = edgeList + i;
+                  //Edge * const edgeListj = edgeList + i;
                                                                                     
-                  GraphWeight * const vertexDegreej = vertex_degree_ + i;
+                  GraphWeight * const vertexDegreej = vertexDegree + i;
                                                                                                         
                   if (vertexDegreej+ZFILL_OFFSET < zfill_limit) {
                       zfill(vertexDegreej+ZFILL_OFFSET);
@@ -346,12 +346,15 @@ class Graph
               if (vertexDegreej+ZFILL_OFFSET < zfill_limit) {                                                                       zfill(vertexDegreej+ZFILL_OFFSET);
               }  
             **/
-            for (GraphElem e = edge_indices_[i]+i; e < edge_indices_[i]+i+ELEMS_PER_CACHE_LINE; ++e)
-                {
-                    Edge const& edge = edge_list_[e];
-                    vertex_degree_[i] += edge.weight_;
-                }
-          
+
+            for(size_t j=0; j < ELEMS_PER_CACHE_LINE; j+=1){
+
+              for (GraphElem e = edge_indices_[i+j]; e < edge_indices_[i+j+1]; ++e)
+                  {
+                      Edge const& edge = edge_list_[e];
+                      vertex_degree_[i+j] += edge.weight_;
+                  }
+            }
          // }
 #ifdef USE_OMP_TASKS_FOR
 		    }
@@ -388,13 +391,13 @@ class Graph
               GraphWeight * const zfill_limit = vertex_degree_ + ( tid + 1 )*nbr_scan_chunk - ZFILL_OFFSET;
 
 
-              Edge * const edgeList = edge_list_;
+              //Edge * const edgeList = edge_list_;
                                     
               GraphWeight * const wMax = vertex_degree_;
                                                                 
-              Edge * const edgeListj = edgeList + i;
+              //Edge * const edgeListj = edgeList + i;
                                                                                 
-              GraphWeight * const wMaxj = vertex_degree_ + i;
+              GraphWeight * const wMaxj = wMax + i;
                                                                                                     
                 if (wMaxj+ZFILL_OFFSET < zfill_limit) {
                     zfill(wMaxj+ZFILL_OFFSET);
@@ -404,16 +407,19 @@ class Graph
                 #pragma omp task
 		    {
 #endif
-                GraphWeight wmax = -1.0;
+                 
+                  GraphWeight wmax = -1.0;
                 
-                  for (GraphElem e = edge_indices_[i]+i; e < edge_indices_[i]+i+ELEMS_PER_CACHE_LINE; ++e)
-                  {
-                      Edge const& edge = edge_list_[e];
-                      if (wmax < edge.weight_)
-                          wmax = edge.weight_;
+                  for(size_t j=0; j < ELEMS_PER_CACHE_LINE; j+=1){
+                      
+                      for (GraphElem e = edge_indices_[i+j]; e < edge_indices_[i+j+1]; ++e)
+                        {
+                          Edge const& edge = edge_list_[e];
+                            if (wmax < edge.weight_)
+                            wmax = edge.weight_;
+                        }
+                      vertex_degree_[i+j] = wmax;
                   }
-                  vertex_degree_[i] = wmax;
-
 #ifdef USE_OMP_TASKS_FOR
 		    }
 #endif
