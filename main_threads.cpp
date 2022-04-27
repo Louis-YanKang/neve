@@ -183,7 +183,7 @@ int main(int argc, char **argv)
 #else
     double times[3][NTIMES]; 
     double avgtime[3] = {0}, maxtime[3] = {0}, mintime[3] = {FLT_MAX,FLT_MAX,FLT_MAX};
-
+    
     for (int k = 0; k < NTIMES; k++)
     {
         times[0][k] = omp_get_wtime();
@@ -196,6 +196,9 @@ int main(int argc, char **argv)
         g->nbrmax();
         times[2][k] = omp_get_wtime() - times[2][k];
     }
+#ifdef OMP_ACCELERATOR   
+    g->check_results();
+#endif
 
     for (int k = 1; k < NTIMES; k++) // note -- skip first iteration
     {
