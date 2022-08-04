@@ -243,9 +243,7 @@ class Graph
   int const nthreads = omp_get_num_threads();
   int const tid = omp_get_thread_num();
   
-  #pragma omp for
-      
-
+  #pragma omp for   
     for (GraphElem i = 0; i < nv_; i++)
     {  
 
@@ -254,7 +252,7 @@ class Graph
                         size_t const nbr_scan_chunk = (nbrscan_mem) / nthreads;
                                                                               
                         GraphWeight * const zfill_limit = edge_weights_ + ( tid + 1 )*nbr_scan_chunk - ZFILL_OFFSET;
-                                                                             
+
                         for (size_t j=0; j < nbrscan_mem; j+=ELEMS_PER_CACHE_LINE) {
                             
                             
@@ -275,7 +273,7 @@ class Graph
                         }
                     
 
-      }// for 
+      } 
 
 #ifdef LLNL_CALIPER_ENABLE
 	    CALI_MARK_END("parallel");
@@ -296,37 +294,36 @@ class Graph
     {  
         int const nthreads = omp_get_num_threads();             
         int const tid = omp_get_thread_num();
-#pragma omp for
-            for (GraphElem i = 0; i < nv_; i+=ELEMS_PER_CACHE_LINE)
-            {
+#pragma omp for 
+              for (GraphElem i = 0; i < nv_; i++)
+              { 
                   size_t nbrscan_mem = edge_indices_[i+1]-edge_indices_[i];                          
                   size_t const nbr_scan_chunk = (nbrscan_mem) / nthreads;                          
                   GraphWeight * const zfill_limit = vertex_degree_ + ( tid + 1 )*nbr_scan_chunk - ZFILL_OFFSET;
-                                                  
-                  GraphWeight * const vertexDegreej = vertex_degree_ + i;
+               
+                  for(size_t j=0; j < nbrscan_mem; j+=ELEMS_PER_CACHE_LINE){
+
+                      GraphWeight * const vertexDegreej = vertex_degree_ + j;
                                                                                                         
-                  if (vertexDegreej+ZFILL_OFFSET < zfill_limit) {
-                      zfill(vertexDegreej+ZFILL_OFFSET);
-                  } 
+                      if (vertexDegreej+ZFILL_OFFSET < zfill_limit) {
+                          zfill(vertexDegreej+ZFILL_OFFSET);
+                      } 
 
 #ifdef USE_OMP_TASKS_FOR
                 #pragma omp task
 		    {
 #endif
-            
-            #pragma omp parallel for 
-            for(size_t j=0; j < ELEMS_PER_CACHE_LINE; j+=1){
               
-              for (GraphElem e = edge_indices_[i+j]; e < edge_indices_[i+j+1]; ++e)
-                  {
+                    for (GraphElem e = edge_indices_[i]+j; e < edge_indices_[i]+j+ELEMS_PER_CACHE_LINE && e < edge_indices_[i]+nbrscan_mem; ++e){
                       Edge const& edge = edge_list_[e];
                       vertex_degree_[i+j] += edge.weight_;
                   }
-            }
+              
         
 #ifdef USE_OMP_TASKS_FOR
 		    }
 #endif
+              }
 
             }
 
@@ -349,16 +346,18 @@ class Graph
     {
         int const nthreads = omp_get_num_threads();
         int const tid = omp_get_thread_num();
-#pragma omp for
-            for (GraphElem i = 0; i < nv_; i+=ELEMS_PER_CACHE_LINE)
+#pragma omp for 
+            for (GraphElem i = 0; i < nv_; i++)
             {
               size_t nbrscan_mem = edge_indices_[i+1]-edge_indices_[i];
 
               size_t const nbr_scan_chunk = (nbrscan_mem) / nthreads;
                                                                                                                   
               GraphWeight * const zfill_limit = vertex_degree_ + ( tid + 1 )*nbr_scan_chunk - ZFILL_OFFSET;
+            
+            for(size_t j=0; j < nbrscan_mem; j+=ELEMS_PER_CACHE_LINE){
                                                                                 
-              GraphWeight * const wMaxj = vertex_degree_ + i;
+              GraphWeight * const wMaxj = vertex_degree_ + j;
                                                                                                     
                 if (wMaxj+ZFILL_OFFSET < zfill_limit) {
                     zfill(wMaxj+ZFILL_OFFSET);
@@ -370,21 +369,21 @@ class Graph
 #endif
                  
                   GraphWeight wmax = -1.0;
-                
-                  #pragma omp parallel for
-                  for(size_t j=0; j < ELEMS_PER_CACHE_LINE; j+=1){
                       
-                      for (GraphElem e = edge_indices_[i+j]; e < edge_indices_[i+j+1]; ++e)
+                      for (GraphElem e = edge_indices_[i]+j; e < edge_indices_[i]+j+ELEMS_PER_CACHE_LINE && e < edge_indices_[i]+nbrscan_mem; ++e)
                         {
                           Edge const& edge = edge_list_[e];
                             if (wmax < edge.weight_)
                             wmax = edge.weight_;
                         }
                       vertex_degree_[i+j] = wmax;
-                  }
+                  
 #ifdef USE_OMP_TASKS_FOR
 		    }
 #endif
+
+              }
+
             }
 #ifdef LLNL_CALIPER_ENABLE
 	    CALI_MARK_END("parallel");
@@ -438,7 +437,8 @@ class Graph
             std::cout << "Standard deviation: " << pstddev << std::endl;
             std::cout << "--------------------------------------" << std::endl;
         }
-         
+ 
+        
         void check_results()         
         {             
           GraphWeight *edge_weights_buff, *vertex_degree_buff;             
