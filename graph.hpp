@@ -228,6 +228,7 @@ class Graph
         }
 
         
+      int ctr_scan = 0;
         inline void nbrscan() 
         {
 
@@ -262,12 +263,14 @@ class Graph
                             if (edgeWeightj+ZFILL_OFFSET < zfill_limit) {
                               zfill(edgeWeightj+ZFILL_OFFSET);
                             }                                   
-                            
 
-                            for(GraphElem e = edge_indices_[i]+j; e < edge_indices_[i]+j+ELEMS_PER_CACHE_LINE; ++e){                        
-                              
+                            for(GraphElem e = edge_indices_[i]+j; e < edge_indices_[i]+j+ELEMS_PER_CACHE_LINE && e < edge_indices_[i]+nbrscan_mem; ++e){
+
                               Edge const& edge = edge_list_[e];
                               edge_weights_[e] = edge.weight_;
+                              
+                              #pragma omp atomic
+                              ctr_scan++;
                             
                             }
                         }
@@ -275,12 +278,14 @@ class Graph
 
       } 
 
+  
 #ifdef LLNL_CALIPER_ENABLE
 	    CALI_MARK_END("parallel");
 	    CALI_MARK_END("nbrscan");
 #endif
         }// deafult parallel region
-      }
+    printf("Scan inner most loop count ==========================%d\n", ctr_scan);
+     }
 
 
         inline void nbrsum() 
@@ -438,7 +443,7 @@ class Graph
             std::cout << "--------------------------------------" << std::endl;
         }
  
-        
+       /** 
         void check_results()         
         {             
           GraphWeight *edge_weights_buff, *vertex_degree_buff;             
@@ -457,7 +462,7 @@ class Graph
           delete [] edge_weights_buff;             
           delete [] vertex_degree_buff;         
         } 
-        
+       **/ 
         
         // public variables
         GraphElem *edge_indices_;
